@@ -1,35 +1,31 @@
 #pragma once
-#include "FoamInterface.h"
 
 #include <MooseMesh.h>
+#include <fvMesh.H>
 
 #include <memory>
 
-namespace Hippo
-{
+namespace Hippo {
 class Foam2MooseMeshAdapter;
 }
-namespace Foam
-{
-template <typename T>
-class IOList;
+namespace Foam {
+template <typename T> class IOList;
 typedef int label;
 typedef IOList<label> labelIOList;
-}
+} // namespace Foam
 
-class FoamMesh : public MooseMesh
-{
+class FoamMesh : public MooseMesh {
 public:
   static InputParameters validParams();
-  FoamMesh(InputParameters const & params);
-  FoamMesh(const FoamMesh & other_mesh);
-  ~FoamMesh(); //{ _interface->dropInstance(); };
+  FoamMesh(InputParameters const &params);
+  FoamMesh(const FoamMesh &other_mesh);
+  ~FoamMesh() = default;
   virtual std::unique_ptr<MooseMesh> safeClone() const override;
   virtual void buildMesh() override;
-  Hippo::FoamInterface * getFoamInterface() { return _interface; }
-  std::vector<int> & getSubdomainList();
+  std::vector<int> &getSubdomainList();
   bool isSerial() const { return _serial; }
-  libMesh::Elem * getElemPtr(int local) const;
+  libMesh::Elem *getElemPtr(int local) const;
+  Foam::fvMesh &fv_mesh() { return _foam_mesh; }
 
   std::vector<int32_t> n_faces{0};
   // The index offset into the MOOSE element array, for the current rank.
@@ -40,9 +36,9 @@ public:
 
 protected:
   std::vector<std::string> _foam_patch;
+  Foam::fvMesh _foam_mesh;
   std::vector<int32_t> _patch_id;
   std::vector<int> _subdomain_list;
-  Hippo::FoamInterface * _interface;
   bool _serial = true;
 };
 // Local Variables:

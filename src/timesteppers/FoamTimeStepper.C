@@ -1,48 +1,38 @@
-#include "FoamTimeStepper.h"
 #include "FoamProblem.h"
+#include "FoamTimeStepper.h"
 
 #include <TimeStepper.h>
 #include <Transient.h>
 
 registerMooseObject("hippoApp", FoamTimeStepper);
 
-InputParameters
-FoamTimeStepper::validParams()
-{
+InputParameters FoamTimeStepper::validParams() {
   auto params = TimeStepper::validParams();
   return params;
 }
 
-FoamTimeStepper::FoamTimeStepper(InputParameters const & params) : TimeStepper(params)
-{
+FoamTimeStepper::FoamTimeStepper(InputParameters const &params)
+    : TimeStepper(params) {
   auto problem = dynamic_cast<FoamProblem *>(&_app.feProblem());
-  if (!problem)
-  {
+  if (!problem) {
     mooseError("FoamTimeStepper expects to be used with FoamProblem");
   }
-  _interface = problem->shareInterface();
 }
 
-Real
-FoamTimeStepper::computeInitialDT()
-{
+Real FoamTimeStepper::computeInitialDT() {
   auto dt = _executioner.parameters().get<double>("dt");
-  _interface->setTimeDelta(_dt);
+  solver().setTimeDelta(_dt);
   return dt;
 }
 
-Real
-FoamTimeStepper::computeDT()
-{
-  _interface->setTimeDelta(_dt);
+Real FoamTimeStepper::computeDT() {
+  solver().setTimeDelta(_dt);
   return _dt;
 }
 
-void
-FoamTimeStepper::init()
-{
+void FoamTimeStepper::init() {
   TimeStepper::init();
-  _interface->setCurrentTime(_time);
-  _interface->setEndTime(_end_time);
-  _interface->setTimeDelta(_dt);
+  solver().setCurrentTime(_time);
+  solver().setEndTime(_end_time);
+  solver().setTimeDelta(_dt);
 }
