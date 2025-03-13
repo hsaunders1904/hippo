@@ -28,14 +28,14 @@ FoamMesh::validParams()
   auto params = MooseMesh::validParams();
   params.addRequiredParam<std::vector<std::string>>("foam_patch",
                                                     "Name of foam boundary patches to replicate.");
-  params.addRequiredParam<std::string>("case", "The directory containing the OpenFOAM case.");
+  params.addRequiredParam<FileName>("case", "The directory containing the OpenFOAM case.");
   return params;
 }
 
 FoamMesh::FoamMesh(InputParameters const & params)
   : MooseMesh(params),
     _foam_patch(params.get<std::vector<std::string>>("foam_patch")),
-    _foam_runtime(params.get<std::string>("case"), _communicator.get()),
+    _foam_runtime(params.get<FileName>("case"), _communicator.get()),
     _foam_mesh(read_polymesh(_foam_runtime.runTime()))
 {
   int size = 1;

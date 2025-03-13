@@ -19,6 +19,7 @@ constexpr auto PARAM_VAR_FOAM_HF = "foam_heat_flux";
 constexpr auto PARAM_VAR_FOAM_T = "foam_temp";
 constexpr auto PARAM_VAR_T = "temp";
 constexpr auto PARAM_VAR_HF = "heat_flux";
+constexpr auto PARAM_SOLVER = "solver";
 
 bool
 is_constant_monomial(const MooseVariableFieldBase & var)
@@ -33,6 +34,21 @@ variableValueAtElement(const libMesh::Elem * element, MooseVariableFieldBase * v
   auto dof = element->dof_number(sys.number(), variable->number(), 0);
   return sys.solution()(dof);
 }
+
+std::string
+getSolverName(const InputParameters & params, const Hippo::FoamRuntime & runtime)
+{
+  for (const auto & solver_factory : std::vector<std::function<std::string()>>(
+           {[&params]() { return params.get<std::string>(PARAM_SOLVER); },
+            [&runtime]() { return runtime.solver_name(); }}))
+  {
+    if (auto solver_name = solver_factory(); !solver_name.empty())
+    {
+      return solver_name;
+    }
+  }
+  return "fluid";
+}
 } // namespace
 
 InputParameters
@@ -40,32 +56,34 @@ FoamProblem::validParams()
 {
   auto params = ExternalProblem::validParams();
 
+  params.addParam<std::string>(PARAM_SOLVER, "", "The OpenFOAM solver to use.");
   // Parameters to set variables to read from/write to.
   // Note that these can be omitted or point to the same variable to save
   // memory.
-  params.addParam<std::string>(PARAM_VAR_FOAM_HF,
-                               "The name of the aux variable to write the "
-                               "OpenFOAM wall heat flux into.");
-  params.addParam<std::string>(PARAM_VAR_FOAM_T,
-                               "The name of the aux variable to write the "
-                               "OpenFOAM boundary temperature into.");
-  params.addParam<std::string>(
+  params.addParam<AuxVariableName>(PARAM_VAR_FOAM_HF,
+                                   "The name of the aux variable to write the "
+                                   "OpenFOAM wall heat flux into.");
+  params.addParam<AuxVariableName>(PARAM_VAR_FOAM_T,
+                                   "The name of the aux variable to write the "
+                                   "OpenFOAM boundary temperature into.");
+  params.addParam<AuxVariableName>(
       PARAM_VAR_HF, "The name of the aux variable to set the OpenFOAM wall heat flux from.");
-  params.addParam<std::string>(PARAM_VAR_T,
-                               "The name of the aux variable to set the "
-                               "OpenFOAM boundary temperature from.");
+  params.addParam<AuxVariableName>(PARAM_VAR_T,
+                                   "The name of the aux variable to set the "
+                                   "OpenFOAM boundary temperature from.");
   return params;
 }
 
 FoamProblem::FoamProblem(InputParameters const & params)
   : ExternalProblem(params),
     _foam_mesh(dynamic_cast<FoamMesh *>(&this->ExternalProblem::mesh())),
-    _solver(Foam::solver::New("fluid", _foam_mesh->fvMesh()).ptr())
+    _solver(
+        Foam::solver::New(getSolverName(params, _foam_mesh->runTime()), _foam_mesh->fvMesh()).ptr())
 {
   assert(_foam_mesh);
 
-  auto t_var_name = params.get<std::string>(PARAM_VAR_T);
-  auto hf_var_name = params.get<std::string>(PARAM_VAR_HF);
+  auto t_var_name = params.get<AuxVariableName>(PARAM_VAR_T);
+  auto hf_var_name = params.get<AuxVariableName>(PARAM_VAR_HF);
   if (t_var_name.empty() && hf_var_name.empty())
   {
     mooseWarning("Neither parameters '",
@@ -85,8 +103,8 @@ FoamProblem::FoamProblem(InputParameters const & params)
                "'.");
   }
 
-  auto foam_t_var_name = params.get<std::string>(PARAM_VAR_FOAM_T);
-  auto foam_hf_var_name = params.get<std::string>(PARAM_VAR_FOAM_HF);
+  auto foam_t_var_name = params.get<AuxVariableName>(PARAM_VAR_FOAM_T);
+  auto foam_hf_var_name = params.get<AuxVariableName>(PARAM_VAR_FOAM_HF);
   if (foam_t_var_name.empty() && foam_hf_var_name.empty())
   {
     mooseWarning("Neither parameters '",
@@ -125,8 +143,8 @@ FoamProblem::syncSolutions(Direction dir)
   }
   if (dir == ExternalProblem::Direction::FROM_EXTERNAL_APP)
   {
-    auto transfer_wall_temp = !parameters().get<std::string>(PARAM_VAR_FOAM_T).empty();
-    auto transfer_wall_heat_flux = !parameters().get<std::string>(PARAM_VAR_FOAM_HF).empty();
+    auto transfer_wall_temp = !parameters().get<AuxVariableName>(PARAM_VAR_FOAM_T).empty();
+    auto transfer_wall_heat_flux = !parameters().get<AuxVariableName>(PARAM_VAR_FOAM_HF).empty();
     if (transfer_wall_temp)
     {
       if (transfer_wall_heat_flux)
@@ -145,8 +163,8 @@ FoamProblem::syncSolutions(Direction dir)
   }
   else if (dir == ExternalProblem::Direction::TO_EXTERNAL_APP)
   {
-    auto transfer_wall_temp = !parameters().get<std::string>(PARAM_VAR_T).empty();
-    auto transfer_wall_heat_flux = !parameters().get<std::string>(PARAM_VAR_HF).empty();
+    auto transfer_wall_temp = !parameters().get<AuxVariableName>(PARAM_VAR_T).empty();
+    auto transfer_wall_heat_flux = !parameters().get<AuxVariableName>(PARAM_VAR_HF).empty();
     if (transfer_wall_temp)
     {
       if (transfer_wall_heat_flux)
@@ -318,7 +336,7 @@ FoamProblem::syncToOpenFoam()
 MooseVariableFieldBase *
 FoamProblem::getConstantMonomialVariableFromParameters(const std::string & parameter_name)
 {
-  auto variable_name = parameters().get<std::string>(parameter_name);
+  auto variable_name = parameters().get<AuxVariableName>(parameter_name);
   auto * var = &getVariable(0, variable_name);
   if (!is_constant_monomial(*var))
   {

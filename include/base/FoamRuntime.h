@@ -15,6 +15,7 @@ public:
   FoamRuntime(const FoamRuntime & rt);
 
   Foam::Time & runTime() { return _runtime; }
+  std::string solver_name() const;
 
 private:
   cArgs _argv;
